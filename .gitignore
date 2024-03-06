@@ -1,1 +1,6 @@
+*.out
+
+*.elf
+*.exe
+
 hello_world.gob
