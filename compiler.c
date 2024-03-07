@@ -4,10 +4,14 @@
 #include <string.h>
 
 // Base string for terminal output
+#define UNKNOWN_BASE "\x1B[30m%s\n\x1B[0m" // Dark Gray
+#define UNKNOWN_BASE_CHAR "\x1B[30m%c\x1B[0m" 
+#define COMMENT_BASE "\x1B[32m%s\n\x1B[0m" // Dark Green
+#define COMMENT_BASE_CHAR "\x1B[32m%c\x1B[0m"
 #define ERROR_BASE "\x1B[91m%s\n\x1B[0m" // Bright Red
 #define METADATA_BASE "\x1B[97m%s\x1B[0m" // Bright White
 
-// Max path length I think, this shouldn;t be an issue if its off a bit though
+// Max path length I think, this shouldn't be an issue if its off a bit though
 #define FILE_PATH_MAX 4096
 
 // String that indicates that the file is a goblang code file
@@ -30,12 +34,19 @@ bool debug_mode = false;
 int version;
 
 // Index to read input file from
-int cursor = 0;
+int input_cursor = 0;
 
 
-void debug_print(char base_string[], char print_sting[]) {
+void debug_print_str(char base_string[], char print_string[]) {
 	if (debug_mode) {
-		fprintf(stdout, base_string, print_sting);
+		fprintf(stdout, base_string, print_string);
+	}
+}
+
+
+void debug_print_char(char base_string[], char print_string) {
+	if (debug_mode) {
+		fprintf(stdout, base_string, print_string);
 	}
 }
 
@@ -113,23 +124,23 @@ void get_version() {
 	// Check for goblang header
 	char file_magic_string[8];
 	memcpy(&file_magic_string, input_file_text, 8);
-	cursor += 8;
+	input_cursor += 8;
 	
 	if (strcmp(file_magic_string, GOBLANG_MAGIC_STRING) != 0) {
 		fprintf(stderr, ERROR_BASE, "File does not begin with goblang header");
-		debug_print(ERROR_BASE, file_magic_string);
+		debug_print_str(ERROR_BASE, file_magic_string);
 		exit(2);
 	}
 
-	debug_print(METADATA_BASE, "Goblang ");
+	debug_print_str(METADATA_BASE, "Goblang ");
 
 	// Convert version number to int
 	char *version_string;
 	int version_string_len = 0;
 	char character;
 	while (character != ';') {
-		character = input_file_text[cursor];
-		cursor++;
+		character = input_file_text[input_cursor];
+		input_cursor++;
 
 		version_string_len++;
 	}
@@ -142,19 +153,54 @@ void get_version() {
 	// Minimum version is 1
 	if (version <= 0) {
 		fprintf(stderr, ERROR_BASE, "Invalid version in header");
-		debug_print(ERROR_BASE, version_string);
+		debug_print_str(ERROR_BASE, version_string);
 		exit(2);
 	}
 
 	// Check if compiler up to date
 	if (version > COMPILER_VERSION) {
 		fprintf(stderr, ERROR_BASE, "Input file was made for a later compiler version");
-		debug_print(ERROR_BASE, version_string);
+		debug_print_str(ERROR_BASE, version_string);
 		exit(2);
 	}
 
-	debug_print(METADATA_BASE, version_string);
-	debug_print(METADATA_BASE, ";");
+	debug_print_str(METADATA_BASE, version_string);
+	debug_print_str(METADATA_BASE, ";");
+}
+
+
+void process_input_file() {
+	while (input_cursor < strlen(input_file_text) - 1) {
+		// Comments
+
+		// Block comment
+		if (input_file_text[input_cursor] == '/' && input_file_text[input_cursor + 1] == '*') {
+			debug_print_char(COMMENT_BASE_CHAR, input_file_text[input_cursor]);
+			++input_cursor;
+
+			while (! (input_file_text[input_cursor] == '/' && input_file_text[input_cursor - 1] == '*')) {
+					debug_print_char(COMMENT_BASE_CHAR, input_file_text[input_cursor]);
+					++input_cursor;
+			}
+			debug_print_char(COMMENT_BASE_CHAR, input_file_text[input_cursor]);
+			++input_cursor;
+		}
+
+		// Line comment
+		if (input_file_text[input_cursor] == '/' && input_file_text[input_cursor + 1] == '/') {
+			debug_print_char(COMMENT_BASE_CHAR, input_file_text[input_cursor]);
+			++input_cursor;
+
+			while (input_file_text[input_cursor] != '\n') {
+					debug_print_char(COMMENT_BASE_CHAR, input_file_text[input_cursor]);
+					++input_cursor;
+			}
+			debug_print_char(COMMENT_BASE_CHAR, input_file_text[input_cursor]);
+		} else {
+			debug_print_char(UNKNOWN_BASE_CHAR, input_file_text[input_cursor]);
+			++input_cursor;
+		}
+	}
 }
 
 
@@ -163,7 +209,9 @@ int main(int argc, char* argv[]) {
 
 	get_version();
 
-	debug_print("%s", "\n");
+	process_input_file();
+
+	debug_print_str("%s", "\n");
 
 	return 0;
 }
